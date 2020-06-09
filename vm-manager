@@ -1,0 +1,108 @@
+#!/bin/bash
+
+source lib/dependency-manager
+source vbox
+
+
+function showUsage
+{
+	echo ""
+	echo "Usage: "
+	echo "        create-vm -c VM_CONFIG_FILE | -h"
+	echo ""
+	echo ""
+	exit 0
+}
+
+function load_configuration
+{
+	local _VM_CONFIG_FILE=${1}
+	if [ -z ${VM_CONFIG_FILE} ]; then
+		log "VM config file not provided."
+		showUsage
+	fi
+	if [ ! -f ${VM_CONFIG_FILE} ]; then
+		abort "VM config file [${VM_CONFIG_FILE}] not found."
+	fi
+	source ${VM_CONFIG_FILE}
+}
+
+function __delete_vm
+{
+	local _VM_NAME=${1}
+	if [[ -z "${_VM_NAME}" ]]; then
+		abort "VM name not provided"
+	else
+		log "Deleting VM..."
+		if (( $(is_vm_exist ${_VM_NAME}) )); then
+			if (( $(is_vm_running ${_VM_NAME}) )); then
+				log "VM is running. Shutting it down..."
+				if (( $(shutdown_vm_forcefully ${_VM_NAME}) )); then
+					while (( $(is_vm_running ${_VM_NAME}) )); do
+						sleep 1
+					done
+				else
+					abort "Failed to shutdown VM"
+				fi
+			fi
+			if (( $(delete_vm ${_VM_NAME}) )); then
+				log "Successfully delete VM."
+			else
+				abort "Failed to delete VM"
+			fi
+		else
+			abort "VM [${_VM_NAME}] doesn't exist"
+		fi
+	fi 
+}
+
+echo ""
+while getopts "c:r:d:h" opt ${@}; do
+	case ${opt} in
+		c)
+echo "Creating..."
+			VM_CONFIG_FILE=${OPTARG}
+			load_configuration ${VM_CONFIG_FILE}
+			create_vm	"${VM_NAME}"		\
+					"${OS_TYPE}"		\
+					"${OS_ISO_FILE}"	\
+					"${VM_DISK_SIZE}"	\
+					"${VM_RAM_SIZE}"	\
+					"${VM_CPU_COUNT}"	\
+					"${SATA_CNTLR_NAME}"	\
+					"${SATA_CNTLR_TYPE}"	\
+					"${SATA_CNTLR_DRIVER}"	\
+					"${IDE_CNTLR_NAME}"	\
+					"${IDE_CNTLR_TYPE}"	\
+					"${VM_DISK_NAME}" 
+			;;
+		r)
+echo "Recreating..."
+			VM_CONFIG_FILE=${OPTARG}
+			load_configuration ${VM_CONFIG_FILE}
+			recreate_vm	"${VM_NAME}"		\
+					"${OS_TYPE}"		\
+					"${OS_ISO_FILE}"	\
+					"${VM_DISK_SIZE}"	\
+					"${VM_RAM_SIZE}"	\
+					"${VM_CPU_COUNT}"	\
+					"${SATA_CNTLR_NAME}"	\
+					"${SATA_CNTLR_TYPE}"	\
+					"${SATA_CNTLR_DRIVER}"	\
+					"${IDE_CNTLR_NAME}"	\
+					"${IDE_CNTLR_TYPE}"	\
+					"${VM_DISK_NAME}" 
+			;;
+		d)
+echo "Deleting....."
+			VM_NAME=${OPTARG}
+			__delete_vm ${VM_NAME}
+			;;
+		h)
+			showUsage
+			;;
+	esac
+done 
+
+
+#::END:: 

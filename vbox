@@ -1,0 +1,206 @@
+#!/bin/bash
+
+source "lib/dependency-manager"
+
+function is_vm_exist
+{
+	local _VM_NAME=${1}
+	if [[ -z "${_VM_NAME}" ]]; then
+		echo 0 
+	else
+		if (( $(vboxmanage list vms | awk '{print $1}' | sed 's/"//g'  | grep -i "^${_VM_NAME}$" > /dev/null 2>&1; echo $?) )); then
+			echo 0
+		else
+			echo 1
+		fi
+	fi
+}
+
+function get_vm_uuid
+{
+	local _VM_NAME=${1}
+	if [[ -z "${_VM_NAME}" ]]; then
+		abort "Cannot retrive VM UUID; since, VM name not provided."
+	else
+		if (( $(is_vm_exist ${_VM_NAME}) )); then
+			local _vmName=$(vboxmanage list vms | awk '{print $1}' | sed 's/"//g'  | grep -i "^${_VM_NAME}$")
+			echo "$(vboxmanage showvminfo ${_vmName} | grep -i "^uuid:" | awk '{print $2}')"
+		else
+			abort "VM [${_VM_NAME}] doesn't exist"
+		fi
+	fi 
+}
+
+function is_vm_running
+{
+	local _VM_NAME=${1}
+	if [[ -z "${_VM_NAME}" ]]; then
+		echo 0
+	else
+		if (( $(is_vm_exist "${_VM_NAME}") )); then
+			if (( $(vboxmanage list runningvms | awk '{print $1}' | sed 's/"//g'  | grep -i "^${_VM_NAME}$" > /dev/null 2>&1; echo $?) )); then
+				echo 0
+			else
+				echo 1
+			fi
+		else
+			echo 0
+		fi
+	fi
+}
+
+function shutdown_vm
+{
+	local _VM_NAME=${1}
+	local _SHUTDOWN_TYPE=${2:-graceful}
+	if [[ -z "${_VM_NAME}" ]]; then
+		echo 0 
+	else
+		if (( $(is_vm_running "${_VM_NAME}") )); then
+			local _SHUTDOWN_COMMAND="acpipowerbutton"
+			if [[ "${_SHUTDOWN_TYPE}" == "forceful" ]]; then
+				_SHUTDOWN_COMMAND="poweroff"
+			fi
+			if (( $(vboxmanage controlvm "${_VM_NAME}" ${_SHUTDOWN_COMMAND} > /dev/null 2>&1; echo $?) )); then
+				echo 0
+			else
+				echo 1
+			fi
+		else
+			echo 0 
+		fi
+	fi
+
+}
+
+function shutdown_vm_forcefully
+{
+	local _VM_NAME=${1}
+	echo $(shutdown_vm "${_VM_NAME}" "forceful")
+} 
+
+function showUsage
+{
+	echo ""
+	echo "Usage: "
+	echo "        create-vm -c VM_CONFIG_FILE | -h"
+	echo ""
+	echo ""
+	exit 0
+}
+
+#
+# Assumption: 
+# The provided ISO file contains either a kickstart or a preseeded ISO image 
+# that power offs after installation is complete..
+#
+function create_vm
+{
+	local _VM_NAME=${1}
+	local _OS_TYPE=${2}
+	local _OS_ISO_FILE=${3}
+	local _VM_DISK_SIZE=${4}
+	local _VM_RAM_SIZE=${5}
+	local _VM_CPU_COUNT=${6}
+	local _SATA_CNTLR_NAME=${7}
+	local _SATA_CNTLR_TYPE=${8}
+	local _SATA_CNTLR_DRIVER=${9}
+	local _IDE_CNTLR_NAME=${10}
+	local _IDE_CNTLR_TYPE=${11}
+	local _VM_DISK_NAME=${12}
+
+	log "Creating ${_VM_NAME} VM using VirtualBox..."
+	if (( $(is_vm_exist ${_VM_NAME}) )); then
+		abort "VM ${_VM_NAME} already exist."
+	fi
+	exeCmd "vboxmanage createvm --name '${_VM_NAME}' --ostype '${_OS_TYPE}' --register"
+	exeCmd "vboxmanage createhd --filename ${_VM_DISK_NAME} --size ${_VM_DISK_SIZE}"
+	exeCmd "vboxmanage storagectl '${_VM_NAME}' --name '${_SATA_CNTLR_NAME}' --add '${_SATA_CNTLR_TYPE}' --controller '${_SATA_CNTLR_DRIVER}'"
+	exeCmd "vboxmanage storageattach '${_VM_NAME}' --storagectl '${_SATA_CNTLR_NAME}' --port 0 --device 0 --type hdd --medium '${_VM_DISK_NAME}'"
+	exeCmd "vboxmanage storagectl '${_VM_NAME}' --name '${_IDE_CNTLR_NAME}' --add '${_IDE_CNTLR_TYPE}'"
+	exeCmd "vboxmanage storageattach '${_VM_NAME}' --storagectl '${_IDE_CNTLR_NAME}' --port 0 --device 0 --type dvddrive --medium '${_OS_ISO_FILE}'" 
+	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --cpus ${_VM_CPU_COUNT}"
+	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --audio none"
+	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --ioapic on"
+	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --boot1 dvd --boot2 disk --boot3 none --boot4 none"
+	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --memory ${_VM_RAM_SIZE} --vram 128"
+	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --nic1 bridged --bridgeadapter1 enp9s0"
+	#exeCmd "vboxheadless -s '${_VM_NAME}'"
+	#exeCmd "vboxmanage storageattach '${_VM_NAME}' --storagectl '${_IDE_CNTLR_NAME}' --port 0 --device 0 --type dvddrive --medium none"
+	log "Successfully created ${_VM_NAME} VM."
+}
+
+function recreate_vm
+{
+	local _VM_NAME=${1}
+	local _OS_TYPE=${2}
+	local _OS_ISO_FILE=${3}
+	local _VM_DISK_SIZE=${4}
+	local _VM_RAM_SIZE=${5}
+	local _VM_CPU_COUNT=${6}
+	local _SATA_CNTLR_NAME=${7}
+	local _SATA_CNTLR_TYPE=${8}
+	local _SATA_CNTLR_DRIVER=${9}
+	local _IDE_CNTLR_NAME=${10}
+	local _IDE_CNTLR_TYPE=${11}
+	local _VM_DISK_NAME=${12}
+
+	if (( $(is_vm_exist ${_VM_NAME}) )); then
+		log "VM ${_VM_NAME} exist."
+		if (( $(is_vm_running ${_VM_NAME}) )); then
+			log "VM ${_VM_NAME} is running..."
+			log "Shutting down..."
+			if (( ! $(shutdown_vm_forcefully ${_VM_NAME}) )); then
+				abort "Failed to shutdown VM"
+			fi 
+		fi
+		log "Deleting VM..."
+		if (( ! $(delete_vm ${_VM_NAME}) )); then
+			abort "Failed to delete VM"
+		else
+			log "Successfully delete VM."
+		fi
+	fi
+	create_vm	"${_VM_NAME}"		\
+			"${_OS_TYPE}"		\
+			"${_OS_ISO_FILE}"	\
+			"${_VM_DISK_SIZE}"	\
+			"${_VM_RAM_SIZE}"	\
+			"${_VM_CPU_COUNT}"	\
+			"${_SATA_CNTLR_NAME}"	\
+			"${_SATA_CNTLR_TYPE}"	\
+			"${_SATA_CNTLR_DRIVER}"	\
+			"${_IDE_CNTLR_NAME}"	\
+			"${_IDE_CNTLR_TYPE}"	\
+			"${_VM_DISK_NAME}" 
+}
+
+function delete_vm
+{
+	local _VM_NAME=${1}
+	if [[ -z "${_VM_NAME}" ]]; then
+		echo 0 
+	else
+		local _VM_UUID=$(get_vm_uuid ${_VM_NAME})
+		if (( $(vboxmanage unregistervm "${_VM_UUID}" --delete > /dev/null 2>&1; echo $?) )); then
+			echo 0
+		else
+			echo 1
+		fi
+	fi
+}
+
+function load_configuration
+{
+	local _VM_CONFIG_FILE=${1}
+	if [ -z ${VM_CONFIG_FILE} ]; then
+		log "VM config file not provided."
+		showUsage
+	fi
+	if [ ! -f ${VM_CONFIG_FILE} ]; then
+		abort "VM config file [${VM_CONFIG_FILE}] not found."
+	fi
+	source ${VM_CONFIG_FILE}
+}
+
+#::END:: 
