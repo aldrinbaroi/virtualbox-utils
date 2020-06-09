@@ -8,7 +8,7 @@ For create/recreate VM functions, it is assumed that the provided ISO file conta
 
 ```
 Usage: 
-        create-vm (-c|-r) VM_CONFIG_FILE | -l VM_TO_BE_CLONED_NAME VM_NEW_NAME | -d VM_NAME | -h
+        vm-manager (-c|-r) VM_CONFIG_FILE | -l VM_TO_BE_CLONED_NAME VM_NEW_NAME | -d VM_NAME | -h
 
         -c Create VM
         -r Recreate VM.  Existing VM will be delete.
