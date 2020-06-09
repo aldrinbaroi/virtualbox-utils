@@ -25,9 +25,9 @@ function get_vm_uuid
 	if [[ -z "${_VM_NAME}" ]]; then
 		abort "Cannot retrive VM UUID; since, VM name not provided."
 	else
-		if (( $(is_vm_exist ${_VM_NAME}) )); then
+		if (( $(is_vm_exist "${_VM_NAME}") )); then
 			local _vmName=$(vboxmanage list vms | awk '{print $1}' | sed 's/"//g'  | grep -i "^${_VM_NAME}$")
-			echo "$(vboxmanage showvminfo ${_vmName} | grep -i "^uuid:" | awk '{print $2}')"
+			echo "$(vboxmanage showvminfo "${_vmName}" | grep -i "^uuid:" | awk '{print $2}')"
 		else
 			abort "VM [${_VM_NAME}] doesn't exist"
 		fi
@@ -103,7 +103,7 @@ function create_vm
 	local _VM_DISK_NAME=${12}
 
 	log "Creating ${_VM_NAME} VM for VirtualBox..."
-	if (( $(is_vm_exist ${_VM_NAME}) )); then
+	if (( $(is_vm_exist "${_VM_NAME}") )); then
 		abort "VM ${_VM_NAME} already exist."
 	fi
 	exeCmd "vboxmanage createvm --name '${_VM_NAME}' --ostype '${_OS_TYPE}' --register"
@@ -138,20 +138,20 @@ function recreate_vm
 	local _IDE_CNTLR_TYPE=${11}
 	local _VM_DISK_NAME=${12}
 
-	if (( $(is_vm_exist ${_VM_NAME}) )); then
+	if (( $(is_vm_exist "${_VM_NAME}") )); then
 		log "VM ${_VM_NAME} exist."
-		if (( $(is_vm_running ${_VM_NAME}) )); then
+		if (( $(is_vm_running "${_VM_NAME}") )); then
 			log "VM ${_VM_NAME} is running..."
 			log "Shutting down..."
-			if (( ! $(shutdown_vm_forcefully ${_VM_NAME}) )); then
+			if (( ! $(shutdown_vm_forcefully "${_VM_NAME}") )); then
 				abort "Failed to shutdown VM"
 			fi 
 		fi
 		log "Deleting VM..."
-		if (( ! $(delete_vm ${_VM_NAME}) )); then
+		if (( ! $(delete_vm "${_VM_NAME}") )); then
 			abort "Failed to delete VM"
 		else
-			log "Successfully delete VM."
+			log "Successfully deleted VM."
 		fi
 	fi
 	create_vm	"${_VM_NAME}"		\
@@ -174,7 +174,7 @@ function delete_vm
 	if [[ -z "${_VM_NAME}" ]]; then
 		echo 0 
 	else
-		local _VM_UUID=$(get_vm_uuid ${_VM_NAME})
+		local _VM_UUID=$(get_vm_uuid "${_VM_NAME}")
 		if (( $(vboxmanage unregistervm "${_VM_UUID}" --delete > /dev/null 2>&1; echo $?) )); then
 			echo 0
 		else
@@ -183,17 +183,94 @@ function delete_vm
 	fi
 }
 
+function delete_vm_ext
+{
+	local _VM_NAME=${1}
+	if [[ -z "${_VM_NAME}" ]]; then
+		abort "VM name not provided"
+	else
+		log "Deleting VM..."
+		if (( $(is_vm_exist "${_VM_NAME}") )); then
+			if (( $(is_vm_running "${_VM_NAME}") )); then
+				log "VM is running. Shutting it down..."
+				if (( $(shutdown_vm_forcefully "${_VM_NAME}") )); then
+					while (( $(is_vm_running "${_VM_NAME}") )); do
+						sleep 1
+					done
+				else
+					abort "Failed to shutdown VM"
+				fi
+			fi
+			if (( $(delete_vm "${_VM_NAME}") )); then
+				log "Successfully deleted VM."
+			else
+				abort "Failed to delete VM"
+			fi
+		else
+			abort "VM [${_VM_NAME}] doesn't exist"
+		fi
+	fi
+}
+
+
 function load_configuration
 {
 	local _VM_CONFIG_FILE=${1}
-	if [ -z ${VM_CONFIG_FILE} ]; then
+	if [ -z ${_VM_CONFIG_FILE} ]; then
 		log "VM config file not provided."
 		showUsage
 	fi
-	if [ ! -f ${VM_CONFIG_FILE} ]; then
-		abort "VM config file [${VM_CONFIG_FILE}] not found."
+	if [ ! -f ${_VM_CONFIG_FILE} ]; then
+		abort "VM config file [${_VM_CONFIG_FILE}] not found."
 	fi
-	source ${VM_CONFIG_FILE}
+	source ${_VM_CONFIG_FILE}
+}
+
+function clone_vm
+{
+	local _VM_NAME=${1}
+	local _VM_NEW_NAME=${2}
+	if [[ -z "${_VM_NAME}" || -z "${_VM_NEW_NAME}" ]]; then
+		echo 0 
+	else
+		if (( $(is_vm_exist "${_VM_NAME}") )); then
+			local _VM_UUID=$(get_vm_uuid "${_VM_NAME}")
+			if (( $(vboxmanage clonevm "${_VM_UUID}" --name "${_VM_NEW_NAME}" --register > /dev/null 2>&1; echo $?) )); then
+				echo 0
+			else
+				echo 1
+			fi
+		else
+			echo 0
+		fi
+	fi
+}
+
+function clone_vm_ext
+{
+	local _VM_NAME=${1}
+	local _VM_NEW_NAME=${2}
+	if [[ -z "${_VM_NAME}" || -z "${_VM_NEW_NAME}" ]]; then
+		abort "Both clone from & new VM names must be provided."
+	else
+		log "Cloning VM..."
+		if (( $(is_vm_exist "${_VM_NAME}") )); then
+			if (( $(is_vm_exist "${_VM_NEW_NAME}") )); then
+				abort "A VM with new VM name [${_VM_NEW_NAME}] already exists."
+			fi
+			if (( $(is_vm_running "${_VM_NAME}") )); then
+				log "To be cloned VM [${_VM_NAME}] is running."
+				abort "Live cloning is not yet implemented."
+			fi
+			if (( $(clone_vm "${_VM_NAME}" "${_VM_NEW_NAME}") )); then
+				log "Successfully cloned VM."
+			else
+				abort "Failed to clone VM"
+			fi
+		else
+			abort "VM [${_VM_NAME}] doesn't exist"
+		fi
+	fi
 }
 
 #::END:: 
