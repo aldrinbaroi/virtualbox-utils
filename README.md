@@ -14,6 +14,6 @@ Usage:
         -r Recreate VM.  Existing VM will be delete.
                          Running VM will be forcefully shutdown & deleted
         -l Clone VM
-        -d Delete VM.  Running VM will be forcefully shutdown & deleted
+        -d Delete VM.    Running VM will be forcefully shutdown & deleted
         -h Show this usage text
 ```
