@@ -13,7 +13,7 @@ function showUsage
 	echo "        -r Recreate VM.  Existing VM will be delete."
 	echo "                         Running VM will be forcefully shutdown & deleted"
 	echo "        -l Clone VM"
-	echo "        -d Delete VM"
+	echo "        -d Delete VM.    Running VM will be forcefully shutdown & deleted"
 	echo "        -h Show this usage text"
 	echo ""
 	exit 0
