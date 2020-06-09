@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# Utility functions for VirtualBox CLI built on top of VBoxManage
+#
 
 source "lib/dependency-manager"
 
@@ -79,16 +82,6 @@ function shutdown_vm_forcefully
 	echo $(shutdown_vm "${_VM_NAME}" "forceful")
 } 
 
-function showUsage
-{
-	echo ""
-	echo "Usage: "
-	echo "        create-vm -c VM_CONFIG_FILE | -h"
-	echo ""
-	echo ""
-	exit 0
-}
-
 #
 # Assumption: 
 # The provided ISO file contains either a kickstart or a preseeded ISO image 
@@ -109,7 +102,7 @@ function create_vm
 	local _IDE_CNTLR_TYPE=${11}
 	local _VM_DISK_NAME=${12}
 
-	log "Creating ${_VM_NAME} VM using VirtualBox..."
+	log "Creating ${_VM_NAME} VM for VirtualBox..."
 	if (( $(is_vm_exist ${_VM_NAME}) )); then
 		abort "VM ${_VM_NAME} already exist."
 	fi
@@ -125,8 +118,8 @@ function create_vm
 	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --boot1 dvd --boot2 disk --boot3 none --boot4 none"
 	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --memory ${_VM_RAM_SIZE} --vram 128"
 	exeCmd "vboxmanage modifyvm '${_VM_NAME}' --nic1 bridged --bridgeadapter1 enp9s0"
-	#exeCmd "vboxheadless -s '${_VM_NAME}'"
-	#exeCmd "vboxmanage storageattach '${_VM_NAME}' --storagectl '${_IDE_CNTLR_NAME}' --port 0 --device 0 --type dvddrive --medium none"
+	exeCmd "vboxheadless -s '${_VM_NAME}'"
+	exeCmd "vboxmanage storageattach '${_VM_NAME}' --storagectl '${_IDE_CNTLR_NAME}' --port 0 --device 0 --type dvddrive --medium none"
 	log "Successfully created ${_VM_NAME} VM."
 }
 
